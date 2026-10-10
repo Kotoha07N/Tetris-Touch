@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Stained Glass Tetris (Touch) by Fond_Circuit</title>
+    <style>
+        body{margin:0;padding:10px;display:flex;flex-direction:column;align-items:center;background:linear-gradient(135deg,#0a0a1a,#1a1a3a,#0a0a1a);color:#e0e0e0;font-family:sans-serif;touch-action:manipulation;overflow-x:hidden}
+        h1{color:#fff;text-shadow:0 0 10px rgba(255,255,255,0.5);font-size:20px;margin:5px 0}
+        .game{display:flex;gap:10px;align-items:flex-start}
+        canvas{border:3px solid rgba(255,255,255,0.2);border-radius:10px;box-shadow:0 0 20px rgba(100,200,255,0.1)}
+        #c{width:60vw;max-width:340px;height:auto}
+        .panel{background:rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px;font-size:12px}
+        .panel h3{margin:0 0 6px;color:#888;font-size:12px}
+        .row{display:flex;justify-content:space-between;margin:4px 0}
+        .val{color:#4fc3f7;font-weight:bold}
+        .side{display:flex;flex-direction:column;gap:10px;width:34vw;max-width:150px}
+        /* タッチコントロール */
+        .controls{width:100%;max-width:400px;margin-top:15px;background:rgba(0,0,0,0.4);border:2px solid rgba(255,255,255,0.15);border-radius:12px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:8px}
+        .crow{display:flex;gap:10px;justify-content:center}
+        .tbtn{background:rgba(255,255,255,0.12);color:#e0e0e0;border:1px solid rgba(255,255,255,0.3);border-radius:12px;width:64px;height:52px;font-size:22px;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;cursor:pointer;touch-action:manipulation}
+        .tbtn:active{background:linear-gradient(135deg,#4fc3f7,#29b6f6);color:#fff}
+        .tbtn.small{width:84px;height:44px;font-size:14px}
+        .overlay{position:fixed;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:1000;background:rgba(0,0,0,0.8)}
+        .modal{background:rgba(10,10,30,0.95);border:2px solid rgba(255,255,255,0.2);border-radius:15px;padding:25px;text-align:center;box-shadow:0 0 30px rgba(100,200,255,0.2)}
+        .modal h2{color:#ff6b6b;margin:0 0 15px}
+        .btn{background:linear-gradient(135deg,#4fc3f7,#29b6f6);color:#fff;border:none;padding:12px 20px;border-radius:25px;font-size:14px;cursor:pointer;margin:5px}
+        .track-btn{background:rgba(255,255,255,0.1);color:#ccc;border:1px solid rgba(255,255,255,0.25);border-radius:15px;padding:5px 10px;margin:2px;font-size:11px;cursor:pointer}
+        .track-btn.active{background:linear-gradient(135deg,#4fc3f7,#29b6f6);color:#fff;border-color:#4fc3f7}
+        .hint{font-size:10px;color:#666;margin-top:5px;text-align:center}
+    </style>
+</head>
+<body>
+    <h1>Stained Glass Tetris</h1>
+    <div class="game">
+        <canvas id="c" width="400" height="800"></canvas>
+        <div class="side">
+            <div class="panel"><h3>NEXT</h3><canvas id="n" width="110" height="110" style="width:100%;height:auto"></canvas></div>
+            <div class="panel">
+                <h3>SCORE</h3>
+                <div class="row"><span>Lv:</span><span class="val" id="lv">1</span></div>
+                <div class="row"><span>Spd:</span><span class="val" id="sp">1000</span></div>
+                <div class="row"><span>Score:</span><span class="val" id="sc">0</span></div>
+                <div class="row"><span>Lines:</span><span class="val" id="ln">0</span></div>
+                <div class="row"><span>T-Spin:</span><span class="val" id="ts">0</span></div>
+            </div>
+            <div class="panel">
+                <h3>BGM</h3>
+                <div>
+                    <button class="track-btn active" onclick="selectTrack(1)">1</button>
+                    <button class="track-btn" onclick="selectTrack(2)">2</button>
+                    <button class="track-btn" onclick="selectTrack(3)">3</button>
+                    <button class="track-btn" onclick="selectTrack(4)">4</button>
+                </div>
+                <button class="btn" onclick="toggleBGM()" id="bgmBtn" style="padding:8px 14px;font-size:12px">🔊 BGM</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- タッチコントロール -->
+    <div class="controls">
+        <div class="crow">
+            <div class="tbtn" onpointerdown="mvL()">◀</div>
+            <div class="tbtn" onpointerdown="rot(1)">⟳</div>
+            <div class="tbtn" onpointerdown="mvR()">▶</div>
+        </div>
+        <div class="crow">
+            <div class="tbtn small" onpointerdown="hold()">HOLD</div>
+            <div class="tbtn small" onpointerdown="mvD()">▼</div>
+            <div class="tbtn small" onpointerdown="hardDrop()">⤓ DROP</div>
+            <div class="tbtn small" onpointerdown="pause()">⏸</div>
+        </div>
+        <p class="hint">Game area swipe: ←→ move / ↓ drop</p>
+    </div>
+
+    <div class="overlay" id="go">
+        <div class="modal">
+            <h2>GAME OVER</h2>
+            <p>Score: <span id="fs" style="color:#4fc3f7;font-weight:bold">0</span></p>
+            <button class="btn" onclick="init()">Play Again</button>
+        </div>
+    </div>
+    <div class="overlay" id="pa">
+        <div class="modal">
+            <h2>PAUSED</h2>
+            <button class="btn" onclick="resumeGame()">Resume</button>
+            <button class="btn" onclick="init()">Reset</button>
+        </div>
+    </div>
+
+    <audio id="bgm" loop preload="auto"></audio>
+
+<script>
+// === BGM Control (4 Tracks) ===
+const bgm = document.getElementById('bgm');
+bgm.volume = 0.3;
+let isBGMOn = false;
+let currentTrack = 1;
+const TRACKS = {1:'bgm.mp3', 2:'bgm2.mp3', 3:'bgm3.mp3', 4:'bgm4.mp3'};
+
+function selectTrack(n) {
+    currentTrack = n;
+    document.querySelectorAll('.track-btn').forEach((b,i) => {
+        b.classList.toggle('active', i === n-1);
+    });
+    if (isBGMOn) {
+        bgm.src = TRACKS[n];
+        bgm.play().catch(err => {
+            // file not found
+        });
+    } else {
+        bgm.src = TRACKS[n];
+    }
+}
+
+function toggleBGM() {
+    if (isBGMOn) {
+        bgm.pause();
+        document.getElementById('bgmBtn').textContent = '🔊 BGM';
+    } else {
+        bgm.src = TRACKS[currentTrack];
+        bgm.play().catch(err => {});
+        document.getElementById('bgmBtn').textContent = '🔇 BGM';
+    }
+    isBGMOn = !isBGMOn;
+}
+
+// === Tetris Core ===
+const W=10,H=20,BS=40,NBS=28;
+let g,cp,np,hp,ch=true,sc=0,lv=1,ln=0,ts=0,go=false,isPaused=false,lt=Date.now(),di=1000,lht=0;
+let loopRunning = false;
+const S={I:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],J:[[2,0,0],[2,2,2],[0,0,0]],L:[[0,0,3],[3,3,3],[0,0,0]],O:[[4,4],[4,4]],S:[[0,5,5],[5,5,0],[0,0,0]],T:[[0,6,0],[6,6,6],[0,0,0]],Z:[[7,7,0],[0,7,7],[0,0,0]]}
+const T=['I','J','L','O','S','T','Z']
+const c=document.getElementById('c'),ctx=c.getContext('2d')
+const n=document.getElementById('n'),nctx=n.getContext('2d')
+const goOverlay=document.getElementById('go'),paOverlay=document.getElementById('pa')
+
+// === Level Color System ===
+const BASE_HUE = {I:185, J:230, L:35, O:55, S:120, T:280, Z:355}
+function hueFor(type, level){ return (BASE_HUE[type] + (level-1)*25) % 360 }
+function colFor(type, level){ return 'hsla(' + hueFor(type, level) + ', 100%, 55%, 0.7)' }
+function glowFor(type, level){ return 'hsla(' + hueFor(type, level) + ', 100%, 70%, 0.4)' }
+const LEAD='rgba(50,50,70,0.8)'
+
+function init(){
+    g=Array.from({length:H},()=>Array(W).fill(0))
+    sc=0;lv=1;ln=0;ts=0;go=false;isPaused=false;ch=true;hp=null;di=1000
+    cp=null;np=null
+    spawn(); update()
+    goOverlay.style.display='none'
+    paOverlay.style.display='none'
+    lt=Date.now()
+    if(!loopRunning){ loopRunning=true; requestAnimationFrame(loop) }
+}
+function create(t){return{type:t,shape:S[t],x:Math.floor(W/2)-Math.floor(S[t][0].length/2),y:0}}
+function randType(){return T[Math.floor(Math.random()*7)]}
+function spawn(){
+    if(!np) np = create(randType())
+    cp = np
+    np = create(randType())
+    cp.x=Math.floor(W/2)-Math.floor(S[cp.type][0].length/2)
+    cp.y=0
+    drawN()
+    if(col()){ go=true; document.getElementById('fs').textContent=sc; goOverlay.style.display='flex' }
+    ch=true
+}
+function col(){
+    for(let r=0;r<cp.shape.length;r++)
+        for(let c=0;c<cp.shape[r].length;c++)
+            if(cp.shape[r][c]){
+                const x=cp.x+c,y=cp.y+r
+                if(x<0||x>=W||y>=H)return 1
+                if(y>=0&&g[y][x])return 1
+            }
+    return 0
+}
+function rot(d=1){
+    if(go||isPaused||!cp)return
+    const o=cp.shape,r=o.length,c=o[0].length,a=[]
+    if(d>0)for(let i=0;i<c;i++){a[i]=[];for(let j=r-1;j>=0;j--)a[i][r-1-j]=o[j][i]}
+    else for(let i=c-1;i>=0;i--){a[c-1-i]=[];for(let j=0;j<r;j++)a[c-1-i][j]=o[j][i]}
+    cp.shape=a;if(col())cp.shape=o
+}
+function isT(){
+    if(cp.type!='T')return 0
+    const p=[[cp.x,cp.y+1],[cp.x+2,cp.y+1],[cp.x+1,cp.y+2]]
+    let c=0
+    for(const[x,y]of p)if(x>=0&&x<W&&y>=0&&y<H)g[y][x]&&c++;else c++
+    return c>=3
+}
+function lock(){
+    for(let r=0;r<cp.shape.length;r++)
+        for(let c=0;c<cp.shape[r].length;c++)
+            if(cp.shape[r][c]){
+                const x=cp.x+c,y=cp.y+r
+                if(y>=0&&y<H&&x>=0&&x<W)g[y][x]=cp.type
+            }
+    const cl=clr()
+    if(isT()){ts++;if(cl==1)sc+=100*lv;else if(cl==2)sc+=400*lv;else if(cl>=3)sc+=800*lv}
+    else sc+={1:100,2:300,3:500,4:800}[cl]*lv||0
+    ln+=cl
+    if(ln>=lv*10){
+        lv=Math.floor(ln/10)+1
+        di=Math.max(100,1000-(lv-1)*100)
+    }
+    update();spawn()
+}
+function clr(){
+    let c=0
+    for(let r=H-1;r>=0;r--){
+        if(g[r].every(v=>v)){g.splice(r,1);g.unshift(Array(W).fill(0));c++;r++}
+    }
+    return c
+}
+function hold(){
+    if(!ch||go||isPaused)return
+    if(!hp){hp=cp;spawn();hp.x=0;hp.y=0}
+    else{
+        const t=hp
+        hp=cp
+        cp=t
+        cp.x=Math.floor(W/2)-Math.floor(S[cp.type][0].length/2)
+        cp.y=0
+        if(col()){go=true;document.getElementById('fs').textContent=sc;goOverlay.style.display='flex'}
+    }
+    ch=false
+}
+function colP(p){
+    for(let r=0;r<p.shape.length;r++)
+        for(let c=0;c<p.shape[r].length;c++)
+            if(p.shape[r][c]){
+                const x=p.x+c,y=p.y+r
+                if(x<0||x>=W||y>=H)return 1
+                if(y>=0&&g[y][x])return 1
+            }
+    return 0
+}
+function draw(){
+    ctx.clearRect(0,0,W*BS,H*BS)
+    const bg=ctx.createLinearGradient(0,0,0,H*BS)
+    bg.addColorStop(0,'#0a0a1a');bg.addColorStop(0.5,'#1a1a3a');bg.addColorStop(1,'#0a0a1a')
+    ctx.fillStyle=bg;ctx.fillRect(0,0,W*BS,H*BS)
+    const lg=ctx.createRadialGradient(W*BS/2,H*BS/2,0,W*BS/2,H*BS/2,W*BS)
+    lg.addColorStop(0,'rgba(100,200,255,0.05)');lg.addColorStop(1,'rgba(100,200,255,0)')
+    ctx.fillStyle=lg;ctx.fillRect(0,0,W*BS,H*BS)
+    ctx.strokeStyle=LEAD;ctx.lineWidth=2
+    for(let x=0;x<=W;x++){ctx.beginPath();ctx.moveTo(x*BS,0);ctx.lineTo(x*BS,H*BS);ctx.stroke()}
+    for(let y=0;y<=H;y++){ctx.beginPath();ctx.moveTo(0,y*BS);ctx.lineTo(W*BS,y*BS);ctx.stroke()}
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(g[y][x])db(x,y,g[y][x])
+    if(cp&&!go){dp(cp);const gp=JSON.parse(JSON.stringify(cp));while(!colP(gp))gp.y++;gp.y--;ctx.globalAlpha=0.3;dp(gp);ctx.globalAlpha=1}
+}
+function db(x,y,t){
+    const px=x*BS,py=y*BS
+    ctx.fillStyle=glowFor(t,lv);ctx.fillRect(px+2,py+2,BS-4,BS-4)
+    ctx.fillStyle=colFor(t,lv);ctx.fillRect(px+1,py+1,BS-2,BS-2)
+    ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(px+3,py+3,BS/3,BS/3)
+    ctx.strokeStyle=LEAD;ctx.lineWidth=2;ctx.strokeRect(px+1,py+1,BS-2,BS-2)
+    ctx.strokeStyle=glowFor(t,lv);ctx.lineWidth=1;ctx.strokeRect(px,py,BS,BS)
+}
+function dp(p){
+    for(let r=0;r<p.shape.length;r++)
+        for(let c=0;c<p.shape[r].length;c++)
+            if(p.shape[r][c]){const x=p.x+c,y=p.y+r;if(x>=0&&x<W&&y>=0&&y<H)db(x,y,p.type)}
+}
+function drawN(){
+    nctx.clearRect(0,0,110,110)
+    const bg=nctx.createLinearGradient(0,0,0,110)
+    bg.addColorStop(0,'#0a0a1a');bg.addColorStop(1,'#1a1a3a')
+    nctx.fillStyle=bg;nctx.fillRect(0,0,110,110)
+    if(np){
+        const ox=(110-np.shape[0].length*NBS)/2,oy=(110-np.shape.length*NBS)/2
+        for(let r=0;r<np.shape.length;r++)
+            for(let c=0;c<np.shape[r].length;c++)
+                if(np.shape[r][c])dnb(ox+c*NBS,oy+r*NBS,np.type)
+    }
+}
+function dnb(x,y,t){
+    nctx.fillStyle=glowFor(t,lv);nctx.fillRect(x+2,y+2,NBS-4,NBS-4)
+    nctx.fillStyle=colFor(t,lv);nctx.fillRect(x+1,y+1,NBS-2,NBS-2)
+    nctx.fillStyle='rgba(255,255,255,0.2)';nctx.fillRect(x+3,y+3,NBS/3,NBS/3)
+    nctx.strokeStyle=LEAD;nctx.lineWidth=1.5;nctx.strokeRect(x+1,y+1,NBS-2,NBS-2)
+    nctx.strokeStyle=glowFor(t,lv);nctx.lineWidth=1;nctx.strokeRect(x,y,NBS,NBS)
+}
+function mvL(){if(go||isPaused)return;cp.x--;if(col())cp.x++}
+function mvR(){if(go||isPaused)return;cp.x++;if(col())cp.x--}
+function mvD(){if(go||isPaused)return;cp.y++;if(col()){cp.y--;lock()}}
+function hardDrop(){if(go||isPaused)return;lht=Date.now();while(!col())cp.y++;cp.y--;lock()}
+function update(){
+    document.getElementById('sc').textContent=sc.toLocaleString()
+    document.getElementById('lv').textContent=lv
+    document.getElementById('ln').textContent=ln
+    document.getElementById('ts').textContent=ts
+    document.getElementById('sp').textContent=di
+}
+function pause(){isPaused=true;paOverlay.style.display='flex'}
+function resumeGame(){isPaused=false;paOverlay.style.display='none';lt=Date.now()}
+function loop(){
+    if(go||isPaused){draw();requestAnimationFrame(loop);return}
+    const now=Date.now()
+    if(now-lt>di){mvD();lt=now}
+    draw();requestAnimationFrame(loop)
+}
+
+// === ゲーム画面のスワイプ操作 ===
+let touchStartX=0,touchStartY=0,touchMoved=false
+c.addEventListener('touchstart',e=>{
+    if(!e.touches[0])return
+    touchStartX=e.touches[0].clientX
+    touchStartY=e.touches[0].clientY
+    touchMoved=false
+},{passive:true})
+c.addEventListener('touchmove',e=>{
+    if(go||isPaused)return
+    const dx=e.touches[0].clientX-touchStartX
+    const dy=e.touches[0].clientY-touchStartY
+    if(Math.abs(dx)>30){          // 左右スワイプ: 移動
+        mvL(); // dummy guard
+        if(dx<0)mvL(); else mvR();
+        touchStartX=e.touches[0].clientX
+        touchMoved=true
+    } else if(dy>30){             // 下スワイプ: ソフトドロップ
+        mvD()
+        touchStartY=e.touches[0].clientY
+        touchMoved=true
+    }
+},{passive:true})
+c.addEventListener('touchend',e=>{
+    if(touchMoved)return
+    if(go){init();return}
+    if(isPaused){resumeGame();return}
+    rot(1)  // タップ: 回転
+},{passive:true})
+
+// ダブルタップ防止
+document.addEventListener('dblclick',e=>e.preventDefault())
+// 長押しメニュー防止
+document.addEventListener('contextmenu',e=>e.preventDefault())
+// 画面のピンチズーム防止
+document.addEventListener('gesturestart',e=>e.preventDefault())
+
+init()
+</script>
+</body>
+</html>
